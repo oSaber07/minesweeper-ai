@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minesweeper AI</title>
+    <style>
+        .board {
+            display: inline-grid;
+            gap: 1px;
+            background-color: #ccc;
+        }
+        .cell {
+            width: 30px;
+            height: 30px;
+            background-color: #eee;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .revealed { background-color: #ddd; }
+        .mine { background-color: #f00; }
+        .flagged { background-color: #ff0; }
+    </style>
+</head>
+<body>
+    <h1>Minesweeper AI</h1>
+    <div>
+        <label for="rows">Rows:</label>
+        <input type="number" id="rows" value="10" min="5" max="20">
+        <label for="cols">Columns:</label>
+        <input type="number" id="cols" value="10" min="5" max="20">
+        <label for="mines">Mines:</label>
+        <input type="number" id="mines" value="10" min="1" max="50">
+        <button onclick="newGame()">New Game</button>
+        <button onclick="aiMove()">AI Move</button>
+    </div>
+    <div id="board" class="board"></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.21.1/axios.min.js"></script>
+    <script>
+        let boardState = [];
+        let gameOver = false;
+
+        function newGame() {
+            const rows = parseInt(document.getElementById('rows').value);
+            const cols = parseInt(document.getElementById('cols').value);
+            const mines = parseInt(document.getElementById('mines').value);
+
+            axios.post('/new_game', { rows, cols, mines })
+                .then(() => {
+                    boardState = Array(rows).fill().map(() => Array(cols).fill(0));
+                    gameOver = false;
+                    renderBoard();
+                });
+        }
+
+        function renderBoard() {
+            const board = document.getElementById('board');
+            board.style.gridTemplateColumns = `repeat(${boardState[0].length}, 30px)`;
+            board.innerHTML = '';
+
+            for (let i = 0; i < boardState.length; i++) {
+                for (let j = 0; j < boardState[i].length; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.onclick = () => makeMove(i, j);
+                    cell.textContent = getCellContent(i, j);
+                    board.appendChild(cell);
+                }
+            }
+        }
+
+        function getCellContent(row, col) {
+            const cellValue = boardState[row][col];
+            if (cellValue === -2) return '🚩';
+            if (cellValue === -1) return '💣';
+            if (cellValue > 0) return cellValue;
+            return '';
+        }
+
+        function makeMove(row, col) {
+            if (gameOver) return;
+
+            axios.post('/make_move', { row, col })
+                .then(response => {
+                    const data = response.data;
+                    boardState = data.revealed.map((row, i) => 
+                        row.map((cell, j) => 
+                            data.flagged[i][j] ? -2 : (cell ? data.result : 0)
+                        )
+                    );
+                    gameOver = data.game_over || data.game_won;
+                    renderBoard();
+                    if (gameOver) {
+                        alert(data.game_won ? 'You won!' : 'Game over!');
+                    }
+                });
+        }
+
+        function aiMove() {
+            if (gameOver) return;
+
+            axios.post('/ai_move')
+                .then(response => {
+                    const data = response.data;
+                    boardState = data.revealed.map((row, i) => 
+                        row.map((cell, j) => 
+                            data.flagged[i][j] ? -2 : (cell ? 1 : 0)
+                        )
+                    );
+                    gameOver = data.game_won;
+                    renderBoard();
+                    if (gameOver) {
+                        alert('AI won the game!');
+                    }
+                });
+        }
+
+        newGame();
+    </script>
+</body>
+</html>
